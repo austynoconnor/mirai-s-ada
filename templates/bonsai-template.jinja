@@ -67,21 +67,27 @@
     {%- endfor %}
     {{- "\n</tools>" }}
     {{- '\n\nIf you choose to call a function ONLY reply in the following format with NO suffix:\n\n<tool_call>\n<function=example_function_name>\n<parameter=example_parameter_1>\nvalue_1\n</parameter>\n<parameter=example_parameter_2>\nThis is the value for the second parameter\nthat can span\nmultiple lines\n</parameter>\n</function>\n</tool_call>\n\n<IMPORTANT>\nReminder:\n- Function calls MUST follow the specified format: an inner <function=...></function> block must be nested within <tool_call></tool_call> XML tags\n- Required parameters MUST be specified\n- You may provide optional reasoning for your function call in natural language BEFORE the function call, but NOT after\n- If there is no function call available, answer the question like normal with your current knowledge and do not tell the user about function calls\n</IMPORTANT>' }}
-    {%- if messages[0].role == 'system' %}
-        {%- set content = render_content(messages[0].content, false, true)|trim %}
-        {%- if content %}
-            {{- '\n\n' + content }}
+    {%- for message in messages %}
+        {%- if message.role == 'system' %}
+            {%- set content = render_content(message.content, false, true)|trim %}
+            {%- if content %}
+                {{- '\n\n' + content }}
+            {%- endif %}
         {%- endif %}
-    {%- endif %}
+    {%- endfor %}
     {{- '\n\n' + operating_rules }}
     {{- '<|im_end|>\n' }}
 {%- else %}
-    {%- if messages[0].role == 'system' %}
-        {%- set content = render_content(messages[0].content, false, true)|trim %}
-    {%- else %}
-        {%- set content = '' %}
-    {%- endif %}
-    {{- '<|im_start|>system\n' + (reasoning_instructions + '\n\n' if reasoning_instructions else '') + (content + '\n\n' if content else '') + operating_rules + '<|im_end|>\n' }}
+    {{- '<|im_start|>system\n' + (reasoning_instructions + '\n\n' if reasoning_instructions else '') }}
+    {%- for message in messages %}
+        {%- if message.role == 'system' %}
+            {%- set content = render_content(message.content, false, true)|trim %}
+            {%- if content %}
+                {{- content + '\n\n' }}
+            {%- endif %}
+        {%- endif %}
+    {%- endfor %}
+    {{- operating_rules + '<|im_end|>\n' }}
 {%- endif %}
 {%- set ns = namespace(multi_step_tool=true, last_query_index=messages|length - 1) %}
 {%- for message in messages[::-1] %}
@@ -100,9 +106,7 @@
 {%- for message in messages %}
     {%- set content = render_content(message.content, true)|trim %}
     {%- if message.role == "system" %}
-        {%- if not loop.first %}
-            {{- raise_exception('System message must be at the beginning.') }}
-        {%- endif %}
+        {# System text was already placed in the leading system block. #}
     {%- elif message.role == "user" %}
         {{- '<|im_start|>' + message.role + '\n' + content + '<|im_end|>' + '\n' }}
     {%- elif message.role == "assistant" %}
